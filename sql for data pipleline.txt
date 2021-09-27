@@ -1,0 +1,92 @@
+Sources
+version: 2
+
+sources:
+  - name: Gad_Food_Resturant_Week2
+    tables:
+      - name: Raw_Users
+      - name: Row_Food_Orders
+
+
+----------------------------------------------------------------------
+data cleaning: (using refrence method)
+select 
+    order_id,
+    customer_id,
+    regexp_replace(lower(item_name), '[^a-z]', '') as item_name,
+    cast(regexp_replace(item_price, '[^0-9]', '') as int64) as item_price
+from 
+    {{ source('Gad_Food_Resturant_Week2', 'Row_Food_Orders') }}
+    --Gad_Food_Resturant_Week2.Row_Food_Orders
+-----------------------------------------------------
+
+users cleaning using (refrence method)
+
+select
+    id,
+    initcap(regexp_replace(lower(name), '[^a-z ]', '')) as name,
+    case
+        when length(cast(phone as string)) = 9 and left(cast(phone as string),2) = '10'
+            then '0' || '100' || right (cast(phone as string), 7)
+        when length(cast(phone as string)) = 9 and left(cast(phone as string),2) = '12'
+            then '0' || '122' || right (cast(phone as string), 7)
+        when length(cast(phone as string)) = 9 and left(cast(phone as string),2) = '11'
+            then '0' || '111' || right (cast(phone as string), 7)
+            else '0' || cast(phone as string) 
+            end as transformed_phone,
+    initcap(country) as country,
+    city,
+    age,
+    gender
+from 
+    {{ source('Gad_Food_Resturant_Week2', 'Raw_Users' )}}
+--Gad_Food_Resturant_Week2.Raw_Users
+---------------------------------------------------------------------------------------------------
+Calculations
+select 
+    item_name,   
+    sum(cast(item_price as int64)) as total_profit
+from
+    Gad_Food_Resturant_Week2.stg_food_orders
+     --{{ ref('stg_food_orders') }}
+group by
+    item_name
+
+--------------------------------------------------------------------------------------------------------------------
+creating the table on bigquery to be in metabase
+
+create table Gad_Food_Resturant_Week2.stg_food_orders_2 as (select 
+    order_id,
+    customer_id,
+    regexp_replace(lower(item_name), '[^a-z]', '') as item_name,
+    cast(regexp_replace(item_price, '[^0-9]', '') as int64) as item_price,
+    date
+from 
+    Gad_Food_Resturant_Week2.Row_Food_Orders    )
+-----------------------------------------------------------------------------------------------------------------------------
+Metabase native query for sum sales for women in cairo
+select 
+    date,
+    sum(item_price) as profit
+from
+    Gad_Food_Resturant_Week2.stg_food_orders_2
+inner join
+    Gad_Food_Resturant_Week2.Raw_Users
+on stg_food_orders_2.customer_id = Raw_Users.id
+where 
+    gender= 'Female'
+group by 
+    date
+------------------------------------------------------------------------------------------------------------------------------
+MACHIENE LEARING ||stg_food_order_2||
+
+first we go to dbt and create sales over time
+
+select
+    extract(year from date) as years,
+    sum(item_price) as profit
+from 
+    Gad_Food_Resturant_Week2.stg_food_orders_2
+    --{{ ref('stg_food_orders')}}
+group by 
+    1
